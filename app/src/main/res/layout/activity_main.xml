@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvAppTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BLUETAG"
+        android:textColor="#00BFFF"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp"/>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/statusCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        app:cardBackgroundColor="#1E1E1E"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:strokeColor="#333333"
+        app:strokeWidth="1dp"
+        app:layout_constraintTop_toBottomOf="@id/tvAppTitle">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:id="@+id/txtRegistered"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Registered Tag: None"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Status: Ready"
+                android:textColor="#AAAAAA"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/txtRssi"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="RSSI: -"
+                android:textColor="#00BFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRegister"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="REGISTER"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:backgroundTint="#333333"
+        android:textColor="#FFFFFF"
+        app:cornerRadius="12dp"
+        app:layout_constraintTop_toBottomOf="@id/statusCard"
+        android:layout_marginTop="40dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnUnpair"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="UNPAIR"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:backgroundTint="#D32F2F"
+        android:textColor="#FFFFFF"
+        app:cornerRadius="12dp"
+        app:layout_constraintTop_toBottomOf="@id/btnRegister"
+        android:layout_marginTop="16dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnFindKey"
+        android:layout_width="match_parent"
+        android:layout_height="65dp"
+        android:text="FIND KEY"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:cornerRadius="12dp"
+        app:backgroundTint="#00BFFF"
+        app:layout_constraintTop_toBottomOf="@id/btnUnpair"
+        android:layout_marginTop="16dp"/>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSearch"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="START AUTO SEARCH"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        app:strokeColor="#00BFFF"
+        android:textColor="#00BFFF"
+        app:cornerRadius="12dp"
+        app:layout_constraintTop_toBottomOf="@id/btnFindKey"
+        android:layout_marginTop="16dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
