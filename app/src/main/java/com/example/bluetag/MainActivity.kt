@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
     private var isMonitoring = false
     private var isAutoConnecting = false
     private var isFindingKey = false
-    private var isScanning = false // ป้องกันการสั่ง Scan ซ้อนทับกัน
+    private var isScanning = false
 
     private var findKeyGatt: BluetoothGatt? = null
     private var autoSearchGatt: BluetoothGatt? = null
@@ -68,13 +68,11 @@ class MainActivity : AppCompatActivity() {
         private const val SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab"
     }
 
-    // ===== ปรับค่าให้เสถียร =====
-    private val enterThreshold = -75      // เข้าใกล้กว่านี้ = ดัง
-    private val exitThreshold = -88       // ห่างกว่านี้ = รีเซ็ตให้พร้อมดังใหม่
-    private val lostTimeoutMs = 4500L     // ถ้าหายไป 4.5 วิ = สัญญาณหลุด
-    private val triggerCooldownMs = 4000L // พักหลังดังเสร็จ 4 วิ
-    private val rssiUiIntervalMs = 2000L  // อัปเดตเลข RSSI บนจอสม่ำเสมอขึ้น
-    // =================================
+    private val enterThreshold = -75
+    private val exitThreshold = -88
+    private val lostTimeoutMs = 4500L
+    private val triggerCooldownMs = 4000L
+    private val rssiUiIntervalMs = 2000L
 
     private var latestRssi = -127
     private var lastSeenMs = 0L
@@ -98,7 +96,6 @@ class MainActivity : AppCompatActivity() {
                     if (tagInRange) {
                         tagInRange = false
                     }
-                    // สำคัญ: บังคับให้พร้อมเตือนใหม่เสมอเมื่อสัญญาณหลุด
                     autoSearchArmed = true
 
                     txtRssi.text = "RSSI: -"
@@ -153,7 +150,7 @@ class MainActivity : AppCompatActivity() {
                 isRegistering = false
                 autoSearchArmed = true
                 tagInRange = false
-                lastSeenMs = System.currentTimeMillis() // รีเซ็ตเวลาเริ่มต้น
+                lastSeenMs = System.currentTimeMillis()
                 btnSearch.text = "Stop Auto Search"
                 txtStatus.text = "Status: Auto search ON"
                 startScan()
@@ -264,7 +261,6 @@ class MainActivity : AppCompatActivity() {
                         lastTriggerMs = now
                         txtStatus.text = "Status: Tag nearby! Alerting..."
 
-                        // หยุดสแกนชั่วคราวขณะเชื่อมต่อ
                         stopScan()
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -276,7 +272,7 @@ class MainActivity : AppCompatActivity() {
                 } else if (rssi <= exitThreshold) {
                     if (tagInRange) {
                         tagInRange = false
-                        autoSearchArmed = true // รีเซ็ตให้พร้อมดังใหม่เมื่อเดินห่างออกมาแล้ว
+                        autoSearchArmed = true
                         txtStatus.text = "Status: Moved away (Armed)"
                     }
                 }
@@ -290,7 +286,6 @@ class MainActivity : AppCompatActivity() {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 runOnUiThread { alert() }
 
-                // ตัดการเชื่อมต่อหลังจากดังไป 500ms เพื่อให้บอร์ดกลับไปปล่อยสัญญาณ
                 Handler(Looper.getMainLooper()).postDelayed({
                     try { gatt?.disconnect() } catch (e: Exception) {}
                 }, 500)
@@ -300,10 +295,8 @@ class MainActivity : AppCompatActivity() {
                 autoSearchGatt = null
                 isAutoConnecting = false
 
-                // กลับมาเริ่มสแกนใหม่ทันทีที่หลุด
                 runOnUiThread {
                     if (autoSearch) {
-                        // 🟢 เพิ่มบรรทัดนี้: รีเซ็ตให้พร้อมดังใหม่เสมอแม้ยืนอยู่กับที่! 🟢
                         autoSearchArmed = true
 
                         txtStatus.text = "Status: Resuming Auto Search..."
