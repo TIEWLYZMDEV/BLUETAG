@@ -17,6 +17,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.LocationManager
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -47,7 +48,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtRegistered: TextView
     private lateinit var txtRssi: TextView
 
-    
     private lateinit var txtLastLocation: TextView
     private lateinit var btnOpenMap: Button
 
@@ -97,7 +97,6 @@ class MainActivity : AppCompatActivity() {
     private var autoSearchArmed = true
     private var locationDialogShowing = false
 
-    
     private var savedLat: Float = 0f
     private var savedLng: Float = 0f
 
@@ -114,13 +113,14 @@ class MainActivity : AppCompatActivity() {
                 if (lost && registeredAddress != null) {
                     if (tagInRange) {
                         tagInRange = false
-                        
                         saveLastLocation()
                     }
                     autoSearchArmed = true
 
-                    txtRssi.text = "RSSI: -"
-                    txtStatus.text = if (autoSearch) "Status: Tag out of range" else "Status: Monitoring..."
+                    txtRssi.text = "- dBm  ▯▯▯▯▯"
+
+                    txtStatus.text = "Disconnected"
+                    txtStatus.setTextColor(Color.parseColor("#F44336"))
 
                     if (timeSinceLastSeen > separationDelayMs && !isLostNotified && autoSearch) {
                         showLostNotification()
@@ -138,7 +138,8 @@ class MainActivity : AppCompatActivity() {
                     isAutoConnecting = false
                     closeAutoGatt()
                     if (autoSearch) {
-                        txtStatus.text = "Status: Connection Timeout, Retrying..."
+                        txtStatus.text = "Searching..."
+                        txtStatus.setTextColor(Color.parseColor("#FFD700"))
                         startScan()
                     }
                 }
@@ -155,7 +156,6 @@ class MainActivity : AppCompatActivity() {
         txtRegistered = findViewById(R.id.txtRegistered)
         txtRssi = findViewById(R.id.txtRssi)
 
-        
         txtLastLocation = findViewById(R.id.txtLastLocation)
         btnOpenMap = findViewById(R.id.btnOpenMap)
 
@@ -169,7 +169,7 @@ class MainActivity : AppCompatActivity() {
         registeredName = prefs.getString("registered_name", "Unknown Tag")
 
         updateRegisteredText()
-        loadSavedLocationUi() 
+        loadSavedLocationUi()
 
         val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = manager.adapter
@@ -185,7 +185,8 @@ class MainActivity : AppCompatActivity() {
             resetAllStates()
             isRegistering = true
             btnSearch.text = "Start Auto Search"
-            txtStatus.text = "Status: Scanning for BLUETAG..."
+            txtStatus.text = "Searching..."
+            txtStatus.setTextColor(Color.parseColor("#FFD700"))
             startScan()
         }
 
@@ -203,7 +204,8 @@ class MainActivity : AppCompatActivity() {
                 lastScanRestartMs = System.currentTimeMillis()
 
                 btnSearch.text = "Stop Auto Search"
-                txtStatus.text = "Status: Auto search ON"
+                txtStatus.text = "Searching..."
+                txtStatus.setTextColor(Color.parseColor("#FFD700"))
 
                 startScan()
             } else {
@@ -222,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnUnpair.setOnClickListener {
+            saveLastLocation()
             resetAllStates()
             prefs.edit()
                 .remove("registered_address")
@@ -231,25 +234,22 @@ class MainActivity : AppCompatActivity() {
             registeredAddress = null
 
             updateRegisteredText()
-            txtStatus.text = "Status: Unpaired"
+            txtStatus.text = "Unpaired"
+            txtStatus.setTextColor(Color.parseColor("#AAAAAA"))
 
-            txtRssi.text = "RSSI: -"
+            txtRssi.text = "- dBm  ▯▯▯▯▯"
             latestRssi = -127
         }
 
-        
         btnOpenMap.setOnClickListener {
             if (savedLat != 0f && savedLng != 0f) {
-                
                 val uri = Uri.parse("geo:$savedLat,$savedLng?q=$savedLat,$savedLng(BlueTag Last Seen)")
                 val intent = Intent(Intent.ACTION_VIEW, uri)
-                intent.setPackage("com.google.android.apps.maps") 
+                intent.setPackage("com.google.android.apps.maps")
 
-                
                 if (intent.resolveActivity(packageManager) != null) {
                     startActivity(intent)
                 } else {
-                    
                     val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=$savedLat,$savedLng"))
                     startActivity(webIntent)
                 }
@@ -257,13 +257,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    
+    private fun getSignalBars(rssi: Int): String {
+        return when {
+            rssi == -127 -> "▯▯▯▯▯"
+            rssi >= -60 -> "▮▮▮▮▮"
+            rssi >= -70 -> "▮▮▮▮▯"
+            rssi >= -80 -> "▮▮▮▯▯"
+            rssi >= -90 -> "▮▮▯▯▯"
+            else -> "▮▯▯▯▯"
+        }
+    }
+
+    private fun updateRssiUi(now: Long) {
+        if (now - lastRssiUiMs >= rssiUiIntervalMs) {
+            if (latestRssi == -127) {
+                txtRssi.text = "- dBm  ▯▯▯▯▯"
+            } else {
+                val bars = getSignalBars(latestRssi)
+                txtRssi.text = "$latestRssi dBm  $bars"
+            }
+            lastRssiUiMs = now
+        }
+    }
+
+    private fun updateRegisteredText() {
+        txtRegistered.text = if (registeredAddress == null) "None"
+        else registeredAddress
+    }
+
     @SuppressLint("MissingPermission")
     private fun saveLastLocation() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-            
             val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
 
@@ -271,11 +297,9 @@ class MainActivity : AppCompatActivity() {
                 val lat = location.latitude.toFloat()
                 val lng = location.longitude.toFloat()
 
-                
                 val timeFormat = SimpleDateFormat("dd MMM HH:mm", Locale.ENGLISH)
                 val timeStr = timeFormat.format(Date())
 
-                
                 prefs.edit()
                     .putFloat("last_lat", lat)
                     .putFloat("last_lng", lng)
@@ -357,7 +381,8 @@ class MainActivity : AppCompatActivity() {
                     registeredName = name.ifBlank { TAG_NAME }
                     prefs.edit().putString("registered_address", address).putString("registered_name", registeredName).apply()
                     updateRegisteredText()
-                    txtStatus.text = "Status: Tag Registered!"
+                    txtStatus.text = "Connected"
+                    txtStatus.setTextColor(Color.parseColor("#4CAF50"))
                     alert()
                     isRegistering = false
                     stopScan()
@@ -368,15 +393,11 @@ class MainActivity : AppCompatActivity() {
 
             if (address != registeredAddress) return
 
-            
             if (!tagInRange) {
                 tagInRange = true
                 runOnUiThread {
-                    if (autoSearch && !isAutoConnecting) {
-                        txtStatus.text = "Status: Tag detected (Moving closer...)"
-                    } else if (!autoSearch) {
-                        txtStatus.text = "Status: Monitoring..."
-                    }
+                    txtStatus.text = "Connected"
+                    txtStatus.setTextColor(Color.parseColor("#4CAF50"))
                 }
             }
 
@@ -384,10 +405,8 @@ class MainActivity : AppCompatActivity() {
             latestRssi = rssi
             updateRssiUi(now)
 
-            
             if (rssi >= enterThreshold) {
 
-                
                 runOnUiThread {
                     txtLastLocation.text = "Tag is nearby!"
                     btnOpenMap.visibility = View.GONE
@@ -401,7 +420,10 @@ class MainActivity : AppCompatActivity() {
                         autoSearchArmed = false
                         isAutoConnecting = true
                         lastTriggerMs = now
-                        runOnUiThread { txtStatus.text = "Status: Tag nearby! Alerting..." }
+                        runOnUiThread {
+                            txtStatus.text = "Connected (Alerting)"
+                            txtStatus.setTextColor(Color.parseColor("#4CAF50"))
+                        }
 
                         stopScan()
 
@@ -413,11 +435,13 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } else if (rssi <= exitThreshold) {
-                
                 if (autoSearch && !isFindingKey && !isAutoConnecting) {
                     if (!autoSearchArmed) {
                         autoSearchArmed = true
-                        runOnUiThread { txtStatus.text = "Status: Moved away (Armed)" }
+                        runOnUiThread {
+                            txtStatus.text = "Connected"
+                            txtStatus.setTextColor(Color.parseColor("#4CAF50"))
+                        }
                     }
                 }
             }
@@ -441,7 +465,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (autoSearch) {
                         autoSearchArmed = true
-                        txtStatus.text = "Status: Resuming Auto Search..."
+                        txtStatus.text = "Searching..."
+                        txtStatus.setTextColor(Color.parseColor("#FFD700"))
                         startScan()
                     } else {
                         startMonitoringIfNeeded()
@@ -473,13 +498,6 @@ class MainActivity : AppCompatActivity() {
 
         notificationManager.notify(1001, notification)
         alert()
-    }
-
-    private fun updateRssiUi(now: Long) {
-        if (now - lastRssiUiMs >= rssiUiIntervalMs) {
-            txtRssi.text = "RSSI: $latestRssi dBm"
-            lastRssiUiMs = now
-        }
     }
 
     private fun alert() {
@@ -519,7 +537,10 @@ class MainActivity : AppCompatActivity() {
     private val findKeyCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                runOnUiThread { txtStatus.text = "Status: Tag Ringing!" }
+                runOnUiThread {
+                    txtStatus.text = "Connected (Ringing)"
+                    txtStatus.setTextColor(Color.parseColor("#4CAF50"))
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 try { gatt?.close() } catch (e: Exception) {}
                 findKeyGatt = null
@@ -528,16 +549,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateRegisteredText() {
-        txtRegistered.text = if (registeredAddress == null) "Registered Tag: None"
-        else "Registered Tag: $registeredName\n($registeredAddress)"
-    }
-
     private fun startMonitoringIfNeeded() {
         if (registeredAddress != null && !autoSearch && !isFindingKey) {
             isMonitoring = true
-            txtStatus.text = "Status: Monitoring..."
+            txtStatus.text = "Searching..."
+            txtStatus.setTextColor(Color.parseColor("#FFD700"))
             startScan()
+        } else if (registeredAddress == null) {
+            txtStatus.text = "Unpaired"
+            txtStatus.setTextColor(Color.parseColor("#AAAAAA"))
         }
     }
 

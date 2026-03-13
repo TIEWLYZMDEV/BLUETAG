@@ -40,32 +40,57 @@
             android:padding="20dp">
 
             <TextView
-                android:id="@+id/txtRegistered"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Registered Tag: None"
+                android:text="BLUETAG Tracker"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/txtStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Status: Ready"
+                android:layout_marginTop="4dp"
+                android:text="Unpaired"
                 android:textColor="#AAAAAA"
                 android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Signal Strength"
+                android:textColor="#888888"
+                android:textSize="14sp" />
 
             <TextView
                 android:id="@+id/txtRssi"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="RSSI: -"
+                android:layout_marginTop="4dp"
+                android:text="- dBm  ▯▯▯▯▯"
                 android:textColor="#00BFFF"
                 android:textSize="18sp"
                 android:textStyle="bold"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Device ID"
+                android:textColor="#888888"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/txtRegistered"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="None"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
