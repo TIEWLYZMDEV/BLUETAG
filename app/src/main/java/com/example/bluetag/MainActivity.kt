@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
                     txtStatus.text = "Disconnected"
                     txtStatus.setTextColor(Color.parseColor("#F44336"))
 
-                    if (timeSinceLastSeen > separationDelayMs && !isLostNotified && autoSearch) {
+                    if (timeSinceLastSeen > separationDelayMs && !isLostNotified && (autoSearch || isMonitoring)) {
                         showLostNotification()
                         isLostNotified = true
                     }
@@ -176,6 +176,7 @@ class MainActivity : AppCompatActivity() {
         scanner = bluetoothAdapter.bluetoothLeScanner
 
         requestPermissions()
+        lastSeenMs = System.currentTimeMillis()
         mainHandler.post(proximityWatcher)
 
         startMonitoringIfNeeded()
@@ -224,7 +225,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnUnpair.setOnClickListener {
-            saveLastLocation()
+            if (tagInRange) {
+                saveLastLocation()
+            }
+
             resetAllStates()
             prefs.edit()
                 .remove("registered_address")
