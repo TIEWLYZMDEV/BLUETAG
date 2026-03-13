@@ -66,6 +66,7 @@
                 android:textColor="#00BFFF"
                 android:textSize="18sp"
                 android:textStyle="bold"/>
+
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -121,4 +122,28 @@
         app:layout_constraintTop_toBottomOf="@id/btnFindKey"
         android:layout_marginTop="16dp"/>
 
+    <TextView
+        android:id="@+id/txtLastLocation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Last Seen: Unknown"
+        android:textColor="#AAAAAA"
+        android:textSize="14sp"
+        android:textAlignment="center"
+        app:layout_constraintTop_toBottomOf="@id/btnSearch"
+        android:layout_marginTop="24dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnOpenMap"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="SEARCH ON MAP"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:backgroundTint="#4CAF50"
+        android:textColor="#FFFFFF"
+        app:cornerRadius="12dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/txtLastLocation"
+        android:layout_marginTop="8dp"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -20,6 +20,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -28,18 +29,27 @@ import android.os.ParcelUuid
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
+@SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity() {
 
     private lateinit var txtStatus: TextView
     private lateinit var txtRegistered: TextView
     private lateinit var txtRssi: TextView
+
+    
+    private lateinit var txtLastLocation: TextView
+    private lateinit var btnOpenMap: Button
 
     private lateinit var btnRegister: Button
     private lateinit var btnSearch: Button
@@ -70,9 +80,13 @@ class MainActivity : AppCompatActivity() {
 
     private val enterThreshold = -75
     private val exitThreshold = -88
-    private val lostTimeoutMs = 4500L
+    private val lostTimeoutMs = 5000L
     private val triggerCooldownMs = 4000L
     private val rssiUiIntervalMs = 2000L
+
+    private val separationDelayMs = 30000L
+    private var isLostNotified = false
+    private var lastScanRestartMs = 0L
 
     private var latestRssi = -127
     private var lastSeenMs = 0L
@@ -83,6 +97,10 @@ class MainActivity : AppCompatActivity() {
     private var autoSearchArmed = true
     private var locationDialogShowing = false
 
+    
+    private var savedLat: Float = 0f
+    private var savedLng: Float = 0f
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val proximityWatcher = object : Runnable {
@@ -90,16 +108,39 @@ class MainActivity : AppCompatActivity() {
             val now = System.currentTimeMillis()
 
             if ((autoSearch || isMonitoring) && !isFindingKey) {
-                val lost = (now - lastSeenMs) > lostTimeoutMs
+                val timeSinceLastSeen = now - lastSeenMs
+                val lost = timeSinceLastSeen > lostTimeoutMs
 
                 if (lost && registeredAddress != null) {
                     if (tagInRange) {
                         tagInRange = false
+                        
+                        saveLastLocation()
                     }
                     autoSearchArmed = true
 
                     txtRssi.text = "RSSI: -"
                     txtStatus.text = if (autoSearch) "Status: Tag out of range" else "Status: Monitoring..."
+
+                    if (timeSinceLastSeen > separationDelayMs && !isLostNotified && autoSearch) {
+                        showLostNotification()
+                        isLostNotified = true
+                    }
+
+                    if (autoSearch && (now - lastScanRestartMs > 10000L)) {
+                        lastScanRestartMs = now
+                        stopScan()
+                        startScan()
+                    }
+                }
+
+                if (isAutoConnecting && (now - lastTriggerMs > 8000L)) {
+                    isAutoConnecting = false
+                    closeAutoGatt()
+                    if (autoSearch) {
+                        txtStatus.text = "Status: Connection Timeout, Retrying..."
+                        startScan()
+                    }
                 }
             }
             mainHandler.postDelayed(this, 1000)
@@ -114,6 +155,10 @@ class MainActivity : AppCompatActivity() {
         txtRegistered = findViewById(R.id.txtRegistered)
         txtRssi = findViewById(R.id.txtRssi)
 
+        
+        txtLastLocation = findViewById(R.id.txtLastLocation)
+        btnOpenMap = findViewById(R.id.btnOpenMap)
+
         btnRegister = findViewById(R.id.btnRegister)
         btnSearch = findViewById(R.id.btnSearch)
         btnFindKey = findViewById(R.id.btnFindKey)
@@ -124,6 +169,7 @@ class MainActivity : AppCompatActivity() {
         registeredName = prefs.getString("registered_name", "Unknown Tag")
 
         updateRegisteredText()
+        loadSavedLocationUi() 
 
         val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = manager.adapter
@@ -131,6 +177,8 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissions()
         mainHandler.post(proximityWatcher)
+
+        startMonitoringIfNeeded()
 
         btnRegister.setOnClickListener {
             if (!ensureReadyForScan(showDialog = true)) return@setOnClickListener
@@ -150,14 +198,19 @@ class MainActivity : AppCompatActivity() {
                 isRegistering = false
                 autoSearchArmed = true
                 tagInRange = false
+                isLostNotified = false
                 lastSeenMs = System.currentTimeMillis()
+                lastScanRestartMs = System.currentTimeMillis()
+
                 btnSearch.text = "Stop Auto Search"
                 txtStatus.text = "Status: Auto search ON"
+
                 startScan()
             } else {
                 autoSearch = false
                 btnSearch.text = "Start Auto Search"
                 closeAutoGatt()
+
                 startMonitoringIfNeeded()
             }
         }
@@ -170,10 +223,81 @@ class MainActivity : AppCompatActivity() {
 
         btnUnpair.setOnClickListener {
             resetAllStates()
-            prefs.edit().clear().apply()
+            prefs.edit()
+                .remove("registered_address")
+                .remove("registered_name")
+                .apply()
+
             registeredAddress = null
+
             updateRegisteredText()
             txtStatus.text = "Status: Unpaired"
+
+            txtRssi.text = "RSSI: -"
+            latestRssi = -127
+        }
+
+        
+        btnOpenMap.setOnClickListener {
+            if (savedLat != 0f && savedLng != 0f) {
+                
+                val uri = Uri.parse("geo:$savedLat,$savedLng?q=$savedLat,$savedLng(BlueTag Last Seen)")
+                val intent = Intent(Intent.ACTION_VIEW, uri)
+                intent.setPackage("com.google.android.apps.maps") 
+
+                
+                if (intent.resolveActivity(packageManager) != null) {
+                    startActivity(intent)
+                } else {
+                    
+                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=$savedLat,$savedLng"))
+                    startActivity(webIntent)
+                }
+            }
+        }
+    }
+
+    
+    @SuppressLint("MissingPermission")
+    private fun saveLastLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+            
+            val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+
+            if (location != null) {
+                val lat = location.latitude.toFloat()
+                val lng = location.longitude.toFloat()
+
+                
+                val timeFormat = SimpleDateFormat("dd MMM HH:mm", Locale.ENGLISH)
+                val timeStr = timeFormat.format(Date())
+
+                
+                prefs.edit()
+                    .putFloat("last_lat", lat)
+                    .putFloat("last_lng", lng)
+                    .putString("last_time", timeStr)
+                    .apply()
+
+                runOnUiThread { loadSavedLocationUi() }
+            }
+        }
+    }
+
+    private fun loadSavedLocationUi() {
+        savedLat = prefs.getFloat("last_lat", 0f)
+        savedLng = prefs.getFloat("last_lng", 0f)
+        val savedTime = prefs.getString("last_time", null)
+
+        if (savedLat != 0f && savedLng != 0f && savedTime != null) {
+            txtLastLocation.text = "Last Seen: $savedTime"
+            btnOpenMap.visibility = View.VISIBLE
+        } else {
+            txtLastLocation.text = "Last Seen: Unknown"
+            btnOpenMap.visibility = View.GONE
         }
     }
 
@@ -185,12 +309,12 @@ class MainActivity : AppCompatActivity() {
         isFindingKey = false
         tagInRange = false
         autoSearchArmed = true
+        isLostNotified = false
         stopScan()
         closeAutoGatt()
         closeFindKeyGatt()
     }
 
-    @SuppressLint("MissingPermission")
     private fun startScan() {
         if (!ensureReadyForScan(false) || isScanning) return
         val settings = ScanSettings.Builder()
@@ -214,14 +338,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
     private fun stopScan() {
         try { scanner?.stopScan(scanCallback) } catch (e: Exception) {}
         isScanning = false
     }
 
     private val scanCallback = object : ScanCallback() {
-        @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             val device = result?.device ?: return
             val address = device.address
@@ -246,20 +368,40 @@ class MainActivity : AppCompatActivity() {
 
             if (address != registeredAddress) return
 
+            
+            if (!tagInRange) {
+                tagInRange = true
+                runOnUiThread {
+                    if (autoSearch && !isAutoConnecting) {
+                        txtStatus.text = "Status: Tag detected (Moving closer...)"
+                    } else if (!autoSearch) {
+                        txtStatus.text = "Status: Monitoring..."
+                    }
+                }
+            }
+
             lastSeenMs = now
             latestRssi = rssi
             updateRssiUi(now)
 
-            if (autoSearch && !isFindingKey && !isAutoConnecting) {
-                if (rssi >= enterThreshold) {
-                    if (!tagInRange) tagInRange = true
+            
+            if (rssi >= enterThreshold) {
+
+                
+                runOnUiThread {
+                    txtLastLocation.text = "Tag is nearby!"
+                    btnOpenMap.visibility = View.GONE
+                }
+
+                if (autoSearch && !isFindingKey && !isAutoConnecting) {
+                    isLostNotified = false
 
                     val cooldownPassed = (now - lastTriggerMs) >= triggerCooldownMs
                     if (autoSearchArmed && cooldownPassed) {
                         autoSearchArmed = false
                         isAutoConnecting = true
                         lastTriggerMs = now
-                        txtStatus.text = "Status: Tag nearby! Alerting..."
+                        runOnUiThread { txtStatus.text = "Status: Tag nearby! Alerting..." }
 
                         stopScan()
 
@@ -269,11 +411,13 @@ class MainActivity : AppCompatActivity() {
                             device.connectGatt(this@MainActivity, false, autoGattCallback)
                         }
                     }
-                } else if (rssi <= exitThreshold) {
-                    if (tagInRange) {
-                        tagInRange = false
+                }
+            } else if (rssi <= exitThreshold) {
+                
+                if (autoSearch && !isFindingKey && !isAutoConnecting) {
+                    if (!autoSearchArmed) {
                         autoSearchArmed = true
-                        txtStatus.text = "Status: Moved away (Armed)"
+                        runOnUiThread { txtStatus.text = "Status: Moved away (Armed)" }
                     }
                 }
             }
@@ -281,7 +425,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val autoGattCallback = object : BluetoothGattCallback() {
-        @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 runOnUiThread { alert() }
@@ -298,7 +441,6 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (autoSearch) {
                         autoSearchArmed = true
-
                         txtStatus.text = "Status: Resuming Auto Search..."
                         startScan()
                     } else {
@@ -307,6 +449,30 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showLostNotification() {
+        val channelId = "bluetag_alert_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId, "BlueTag Alerts",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Did you forgot Bluetag?")
+            .setContentText("The signal has been lost for more than 30 seconds. Please check your key!")
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(1001, notification)
+        alert()
     }
 
     private fun updateRssiUi(now: Long) {
@@ -326,7 +492,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {}
     }
 
-    @SuppressLint("MissingPermission")
     private fun startFindKey() {
         stopMonitoring()
         autoSearch = false
@@ -344,7 +509,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
     private fun stopFindKey() {
         isFindingKey = false
         btnFindKey.text = "FIND KEY"
@@ -382,14 +546,12 @@ class MainActivity : AppCompatActivity() {
         stopScan()
     }
 
-    @SuppressLint("MissingPermission")
     private fun closeAutoGatt() {
         try { autoSearchGatt?.disconnect() } catch (e: Exception) {}
         try { autoSearchGatt?.close() } catch (e: Exception) {}
         autoSearchGatt = null
     }
 
-    @SuppressLint("MissingPermission")
     private fun closeFindKeyGatt() {
         try { findKeyGatt?.disconnect() } catch (e: Exception) {}
         try { findKeyGatt?.close() } catch (e: Exception) {}
@@ -401,6 +563,13 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             perms.add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
                 perms.add(Manifest.permission.BLUETOOTH_SCAN)
