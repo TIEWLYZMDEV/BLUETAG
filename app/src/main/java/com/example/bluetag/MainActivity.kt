@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtStatus: TextView
     private lateinit var txtRegistered: TextView
     private lateinit var txtRssi: TextView
+    private lateinit var txtBattery: TextView // เพิ่มตัวแปร Battery
 
     private lateinit var txtLastLocation: TextView
     private lateinit var btnOpenMap: Button
@@ -118,6 +119,7 @@ class MainActivity : AppCompatActivity() {
                     autoSearchArmed = true
 
                     txtRssi.text = "- dBm  ▯▯▯▯▯"
+                    txtBattery.text = "Battery: --%" // รีเซ็ตแบตเตอรี่เมื่อสัญญาณหาย
 
                     txtStatus.text = "Disconnected"
                     txtStatus.setTextColor(Color.parseColor("#F44336"))
@@ -155,6 +157,7 @@ class MainActivity : AppCompatActivity() {
         txtStatus = findViewById(R.id.txtStatus)
         txtRegistered = findViewById(R.id.txtRegistered)
         txtRssi = findViewById(R.id.txtRssi)
+        txtBattery = findViewById(R.id.txtBattery) // ผูกตัวแปร Battery
 
         txtLastLocation = findViewById(R.id.txtLastLocation)
         btnOpenMap = findViewById(R.id.btnOpenMap)
@@ -242,6 +245,7 @@ class MainActivity : AppCompatActivity() {
             txtStatus.setTextColor(Color.parseColor("#AAAAAA"))
 
             txtRssi.text = "- dBm  ▯▯▯▯▯"
+            txtBattery.text = "Battery: --%" // เคลียร์แบตเมื่อเลิกจับคู่
             latestRssi = -127
         }
 
@@ -408,6 +412,27 @@ class MainActivity : AppCompatActivity() {
             lastSeenMs = now
             latestRssi = rssi
             updateRssiUi(now)
+
+            // --- ส่วนที่เพิ่ม: ดึงข้อมูล Battery จาก Advertising Data ---
+            val scanRecord = result.scanRecord
+            val manufacturerData = scanRecord?.manufacturerSpecificData
+            if (manufacturerData != null && manufacturerData.size() > 0) {
+                val dataBytes = manufacturerData.valueAt(0)
+                if (dataBytes != null && dataBytes.isNotEmpty()) {
+                    // ดึงไบต์สุดท้ายที่ส่งมา (ค่า 0-100)
+                    val battPercent = dataBytes.last().toInt() and 0xFF
+
+                    runOnUiThread {
+                        txtBattery.text = "Battery: $battPercent%"
+                        if (battPercent <= 20) {
+                            txtBattery.setTextColor(Color.parseColor("#F44336")) // สีแดงเมื่อแบตต่ำกว่า 20%
+                        } else {
+                            txtBattery.setTextColor(Color.parseColor("#4CAF50")) // สีเขียวเมื่อแบตปกติ
+                        }
+                    }
+                }
+            }
+            // -------------------------------------------------------------
 
             if (rssi >= enterThreshold) {
 
