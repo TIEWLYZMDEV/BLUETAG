@@ -228,9 +228,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnUnpair.setOnClickListener {
-            if (tagInRange) {
-                saveLastLocation()
-            }
+            saveLastLocation()
 
             resetAllStates()
             prefs.edit()
@@ -298,8 +296,9 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-            val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            var location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            if (location == null) location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            if (location == null) location = locationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
 
             if (location != null) {
                 val lat = location.latitude.toFloat()
@@ -313,9 +312,8 @@ class MainActivity : AppCompatActivity() {
                     .putFloat("last_lng", lng)
                     .putString("last_time", timeStr)
                     .apply()
-
-                runOnUiThread { loadSavedLocationUi() }
             }
+            runOnUiThread { loadSavedLocationUi() }
         }
     }
 
